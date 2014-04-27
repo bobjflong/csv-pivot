@@ -1,0 +1,156 @@
+(Do
+
+  ; Create a named content node
+  ; By default [] children
+  (Func create-node name content)
+    (Do
+      (Let result (Struct name content children))
+      (Set-name result name)
+      (Set-content result content)
+      (Set-children result (. :new :Array))
+      result)
+
+  (Func show-content content)
+    (Do
+      (If (= "Array" (-> :to_s :class content))
+        (Call map (lambda x (Show (. (Cons :join ",") x))) content)
+        (Show content)))
+  
+  (Func display-node node)
+    (Do
+      (Show (Get-name node))
+
+      (If (. :blank? (Get-children node))
+        (Call show-content (Get-content node))
+        (Call map display-node (Get-children node))))
+
+  (Func add-to-children node child)
+    (Do
+      (Let prev-children (Get-children node))
+      (Let new-children (Send (Cons :push child) prev-children))
+      (Set-children node new-children))
+
+  (Func create-array-hash void)
+    (Do
+      (. :new :Hash))
+
+  (Func get-or-create-hash-array-value hash value)
+    (Do
+      (If value
+        (Let already (. (Cons :[] value) hash))
+        null)
+      (If already
+        already
+        (Send :new :Array)))
+  
+  (Func set-hash-array-value hash key value)
+    (Do
+      (. (Cons "[]=" (Call concat key value)) hash))
+
+  ; Take a nodes content: 1. group it by index 2. stick those groups as children in the node
+  (Func group-content-into-children node index)
+    (Do
+      (Func has-content void)
+        (Do
+          
+          (Let result-hash (Call fold
+              (Func _ acc x ~(index))
+                (Do
+                  (Let groupable-value (. (Cons :[] index) x))
+                  (Let already-in-this-group (Call get-or-create-hash-array-value acc groupable-value))
+                  (. (Cons :unflat_send (Cons :push x)) already-in-this-group)
+                
+                  (If groupable-value
+                    (Call set-hash-array-value acc groupable-value already-in-this-group)
+                    null)
+                  acc)
+              (Call create-array-hash void)
+              (Get-content node)))
+          
+          ; 2.
+          (Let keys (. :keys result-hash))
+
+          (Call map (Func _ value ~(result-hash node))
+                      (Do
+                        (Let new-name value)
+                        (Let new-content (. (Cons :[] value) result-hash))
+                        (Let new-node (Call create-node new-name new-content))
+                        (Call add-to-children node new-node))
+                      keys)
+          node)
+        
+        (If (. :blank? (Get-children node))
+          (Call has-content void)
+          (Call map (lambda child ~(index)
+            (Call group-content-into-children child index)) (Get-children node))))
+  
+  (Func summarise-content node f)
+    (Do
+      (Func has-content void)
+        (Do
+          (Let new-content (Apply f (Get-content node)))
+          (Set-content node new-content))
+
+      (If (. :blank? (Get-children node))
+        (Call has-content void)
+        (Call map (lambda child ~(f)
+          (Call summarise-content child f)) (Get-children node))))
+
+  (Func read-csv void)
+    (Do
+      (Call create-node ""
+        (Call map (lambda x (. (Cons :split (. :chr 44)) x))
+          (->
+            (Cons :split (. :chr 10))
+            :chomp
+            :read
+            (. (Cons :const_get :STDIN) :Kernel)))))
+
+  (Func get-command-line-args void)
+    (Do
+      (. (Cons :drop 1) (. (Cons :const_get :ARGV) :Kernel)))
+
+  (Func sum-content content index)
+    (Do
+      (Call fold
+          (Func _ x y ~(index))
+            (Do
+              (Let acc (+ x (. :to_f (. (Cons :[] index) y))))
+              acc)
+            
+        0 content))
+  
+  (Func main void)
+    (Do
+      (Let node (Call read-csv void))
+
+      ; group-by
+      (Func gb index)
+        (Do (Call group-content-into-children node index))
+      
+      ; avg-by
+      (Func ab index)
+        (Do
+          (Func averager _ ~(index))
+            (Do
+              (Let count (. :length arguments))
+              (Let total (Call sum-content arguments index))
+                    
+              (/ (. :to_f total) count))
+          (Call summarise-content node averager))
+
+      ; sum-by
+      (Func sb index)
+        (Do
+          (Func summer _ ~(index))
+            (Do
+              (Call sum-content arguments index))
+
+          (Call summarise-content node summer))
+
+      (Call map (lambda arg (Evaluate arg)) (Call get-command-line-args void))
+      (Call display-node node))
+
+  (Call main void)
+)
+
