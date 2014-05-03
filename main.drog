@@ -72,9 +72,9 @@
 
           (Call map (Func _ value ~(result-hash node))
                       (Do
-                        (Let new-name value)
-                        (Let new-content (. (Cons :[] value) result-hash))
-                        (Let new-node (Call create-node new-name new-content))
+                        (LetMany (new-name value)
+                                 (new-content (. (Cons :[] value) result-hash))
+                                 (new-node (Call create-node new-name new-content)))
                         (Call add-to-children node new-node))
                       keys)
           node)
